@@ -351,6 +351,198 @@ oc patch configmap app-config -p '{"data":{"API_TIMEOUT":"100"}}'
 # Switch traffic only when working
 ```
 
+## Cost Considerations: The Elephant in the Room
+
+**"So I should double my workloads? That will be expensive..."**
+
+This is a fair and common concern. If you're running 1,000 pods in production, spinning up another 1,000 just to test a configuration change sounds prohibitively expensive. Let's address this directly.
+
+### The Reality: It's Transient, Not Permanent
+
+Blue-green is **not** about running twice the infrastructure forever. It's about a **temporary spike** in resource usage during the deployment window.
+
+**Typical Timeline:**
+```bash
+09:00 - Blue running (1000 pods)                    Cost: Normal
+09:05 - Deploy Green (2000 pods total)              Cost: 2x (Start of spike)
+09:15 - Test Green, verify config                   Cost: 2x
+09:20 - Switch traffic to Green                     Cost: 2x
+09:30 - Monitor Green, confirm stable               Cost: 2x
+09:45 - Delete Blue (back to 1000 pods)            Cost: Normal (End of spike)
+```
+
+**Time at doubled cost:** 40 minutes
+**Monthly impact:** 40 minutes / 43,200 minutes/month = **0.09% increase** in compute cost
+
+### The "Insurance Policy" Math
+
+Every production incident has a real price tag. Let's compare:
+
+**Traditional ConfigMap Update (Looks Free... Until It Breaks)**
+- Infrastructure cost: $0 extra
+- Risk: 4-hour outage when bad config hits production
+- Outage cost breakdown:
+  - Lost revenue: $25,000 (e-commerce downtime)
+  - Engineering overtime: $8,000 (5 engineers × 4 hours)
+  - Customer support escalations: $5,000
+  - Reputation damage: Priceless (but real)
+- **Total cost of ONE bad config update: $38,000+**
+
+**Blue-Green Deployment**
+- Infrastructure cost: $75 for 40 minutes of doubled pods
+- Risk: Zero outage (bad config caught before traffic switch)
+- Outage cost: $0
+- **Total cost: $75**
+
+**The Question:** Would you pay $75 to avoid a $38,000 outage?
+
+**Put another way:** You could do 500 blue-green deployments for the cost of ONE failed traditional update.
+
+### The "Thin Green" Strategy
+
+You don't need to scale green to full production size immediately. Start small, test, then scale.
+
+```bash
+# 1. Deploy green with MINIMAL replicas (just for testing)
+oc apply -f configmap-green.yaml
+oc apply -f deployment-green.yaml
+oc scale deployment/myapp-green --replicas=2  # Only 2 pods!
+
+# 2. Wait for green to be ready
+oc rollout status deployment/myapp-green
+
+# 3. Run comprehensive tests against the 2 green pods
+oc port-forward deployment/myapp-green 8081:3000
+./run-smoke-tests.sh http://localhost:8081
+./run-integration-tests.sh http://localhost:8081
+./test-config-values.sh http://localhost:8081
+
+# 4. ONLY if all tests pass, scale green to production size
+oc scale deployment/myapp-green --replicas=100  # Match blue's size
+
+# 5. Wait for scale-up
+oc rollout status deployment/myapp-green
+
+# 6. Switch traffic
+oc patch svc myapp -p '{"spec":{"selector":{"version":"green"}}}'
+
+# 7. Monitor for 10-15 minutes
+oc logs -f -l version=green | grep ERROR
+
+# 8. If stable, delete blue
+oc delete deployment myapp-blue
+oc delete configmap app-config-blue
+
+# Time breakdown:
+# - Testing with 2 green pods: 10 minutes (negligible cost)
+# - Full green + blue running: 15 minutes (doubled cost)
+# - Total cost impact: ~25 minutes at 2x capacity
+```
+
+**Cost with Thin Green:**
+- 10 minutes at 102 pods (2% increase): ~$2
+- 15 minutes at 200 pods (100% increase): ~$50
+- **Total: $52 instead of $75**
+
+### Selective Application: Not Everything Needs Blue-Green
+
+Use blue-green strategically based on service criticality and blast radius:
+
+| Service Type | Recommended Strategy | Rationale |
+|-------------|---------------------|-----------|
+| **Customer-facing API** | Blue-Green | Downtime = direct revenue loss |
+| **Payment processing** | Blue-Green | Failures = compliance issues, money lost |
+| **Authentication service** | Blue-Green | Affects all users, high visibility |
+| **Real-time dashboards** | Blue-Green | Customer-facing, reputation risk |
+| **Internal admin tools** | RollingUpdate | Low user impact if brief issues |
+| **Batch processing jobs** | RollingUpdate | Can tolerate restarts |
+| **Development environment** | Direct update | Zero risk tolerance needed |
+| **CI/CD pipelines** | Direct update | Failures don't affect customers |
+
+**Example Cost Optimization:**
+```
+Production environment (100 pods total):
+- Critical services (30 pods): Blue-green → 30 min at 2x = $30
+- Standard services (50 pods): RollingUpdate → Negligible cost
+- Non-critical (20 pods): Direct update → $0
+
+Total blue-green cost: $30/deployment vs. $75 if everything used blue-green
+Potential outage avoided: $38,000
+ROI: 1,266x
+```
+
+### Cloud Auto-Scaling Minimizes Cost
+
+Modern cloud platforms (OpenShift, EKS, GKE, AKS) use **auto-scaling node groups**:
+
+**How it works:**
+1. Deploy green → Cluster sees increased pod demand
+2. Auto-scaler adds 2-3 worker nodes (takes ~3 minutes)
+3. Green pods scheduled on new nodes
+4. Test and switch traffic
+5. Delete blue → Pods removed
+6. Auto-scaler sees idle capacity
+7. Auto-scaler removes worker nodes (~5 minutes)
+
+**You only pay for:**
+- The exact time the nodes exist (~30-40 minutes)
+- At per-second billing rates (AWS, GCP, Azure all use this)
+- **Cost:** ~$0.50-$2.00 per deployment on typical workloads
+
+### The Alternative: RollingUpdate
+
+If you absolutely cannot afford the transient spike, you can fall back to **RollingUpdate** for ConfigMap changes.
+
+**The Trade-off:**
+
+| Aspect | Blue-Green | RollingUpdate |
+|--------|-----------|---------------|
+| **Cost** | $$$ (Temporary 2x) | $$ (Gradual ~1.5x) |
+| **Risk** | Low (Isolated testing) | Medium (Gradual rollout) |
+| **Rollback Speed** | < 1 second | 3-5 minutes |
+| **Blast Radius** | Zero (test first) | Partial (some users affected) |
+| **Best For** | Mission-critical | Standard operations |
+
+**RollingUpdate Example:**
+```yaml
+spec:
+  replicas: 100
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%        # Add 25 extra pods temporarily
+      maxUnavailable: 0    # Never reduce capacity
+```
+
+**Cost:** Only 25% extra capacity during rollout (not 100%)
+**Risk:** If new ConfigMap breaks the app, 25 pods will fail before rollout pauses
+
+### Summary: Cost vs. Risk Decision Matrix
+
+| Monthly Deployments | Blue-Green Cost | Potential Outage Cost | ROI |
+|---------------------|-----------------|---------------------|-----|
+| 1 deployment | $75 | $38,000 (one failure) | 506x |
+| 10 deployments | $750 | $38,000 (one failure) | 50x |
+| 100 deployments | $7,500 | $38,000 (one failure) | 5x |
+
+**Key Insight:** Even with 100 deployments per month, preventing ONE major outage pays for the entire year of blue-green deployments.
+
+### Recommendation
+
+**Start conservative, expand based on results:**
+
+1. **Week 1:** Use blue-green for your most critical service (the one that costs the most if it goes down)
+2. **Measure:** Track deployment cost vs. incident reduction
+3. **Week 2-4:** Expand to other critical services based on ROI
+4. **Ongoing:** Use RollingUpdate for non-critical services to save cost
+
+**Most customers find that:**
+- Blue-green adds 1-3% to monthly infrastructure costs
+- Eliminates 80-90% of config-related outages
+- Pays for itself after preventing a single major incident
+
+The question isn't "Can we afford blue-green?" It's "Can we afford NOT to use blue-green for our critical services?"
+
 ## Best Practices
 
 ### 1. Treat ConfigMaps as Immutable
