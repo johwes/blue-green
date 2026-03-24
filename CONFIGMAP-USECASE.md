@@ -83,26 +83,26 @@ Traditional (Mutable):                   Blue-Green (Immutable):
 **1. Atomic Configuration Changes**
 ```bash
 # Blue runs with old config (stable)
-ocget pods -l version=blue
+oc get pods -l version=blue
 # All blue pods use configmap-blue
 
 # Deploy green with new config
-ocapply -f configmap-green.yaml
-ocapply -f deployment-green.yaml
+oc apply -f configmap-green.yaml
+oc apply -f deployment-green.yaml
 # All green pods use configmap-green
 
 # Test green before switching traffic
-ocport-forward deployment/bluegreen-demo-green 8081:3000
+oc port-forward deployment/bluegreen-demo-green 8081:3000
 curl http://localhost:8081/config
 
 # Switch traffic ONLY when green is verified
-ocpatch svc bluegreen-demo -p '{"spec":{"selector":{"version":"green"}}}'
+oc patch svc bluegreen-demo -p '{"spec":{"selector":{"version":"green"}}}'
 ```
 
 **2. Instant Rollback**
 ```bash
 # If green config breaks something
-ocpatch svc bluegreen-demo -p '{"spec":{"selector":{"version":"blue"}}}'
+oc patch svc bluegreen-demo -p '{"spec":{"selector":{"version":"blue"}}}'
 # Traffic back to blue in < 1 second
 # Green still running for debugging
 ```
@@ -125,8 +125,8 @@ curl http://green-pod-ip:3000/config
 **4. Clear Version Tracking**
 ```bash
 # Know exactly which config each deployment uses
-ocget configmap -l version=blue
-ocget configmap -l version=green
+oc get configmap -l version=blue
+oc get configmap -l version=green
 
 # Audit trail through git
 git log openshift/configmap-green.yaml
@@ -196,20 +196,20 @@ spec:
 
 ```bash
 # 1. Current state: Blue is active with blue config
-ocget svc myapp -o jsonpath='{.spec.selector.version}'
+oc get svc myapp -o jsonpath='{.spec.selector.version}'
 # Output: blue
 
 # 2. Create new ConfigMap for green
-ocapply -f configmap-green.yaml
+oc apply -f configmap-green.yaml
 
 # 3. Deploy green with new config
-ocapply -f deployment-green.yaml
+oc apply -f deployment-green.yaml
 
 # 4. Wait for green to be ready
-ocrollout status deployment/myapp-green
+oc rollout status deployment/myapp-green
 
 # 5. Test green configuration
-ocport-forward deployment/myapp-green 8081:3000
+oc port-forward deployment/myapp-green 8081:3000
 curl http://localhost:8081/config
 # Verify config values are correct
 
@@ -217,17 +217,17 @@ curl http://localhost:8081/config
 ./run-tests.sh http://localhost:8081
 
 # 7. Switch traffic to green (if tests pass)
-ocpatch svc myapp -p '{"spec":{"selector":{"version":"green"}}}'
+oc patch svc myapp -p '{"spec":{"selector":{"version":"green"}}}'
 
 # 8. Monitor for issues
-oclogs -f -l version=green
+oc logs -f -l version=green
 
 # 9. Rollback if needed (instant)
-ocpatch svc myapp -p '{"spec":{"selector":{"version":"blue"}}}'
+oc patch svc myapp -p '{"spec":{"selector":{"version":"blue"}}}'
 
 # 10. Clean up blue after green is stable (24-48 hours)
-ocdelete deployment myapp-blue
-ocdelete configmap app-config-blue
+oc delete deployment myapp-blue
+oc delete configmap app-config-blue
 ```
 
 ## Common Scenarios
@@ -237,7 +237,7 @@ ocdelete configmap app-config-blue
 **Problem with mutable ConfigMap:**
 ```bash
 # Change feature flag
-ocpatch configmap app-config -p '{"data":{"FEATURE_NEW_UI":"true"}}'
+oc patch configmap app-config -p '{"data":{"FEATURE_NEW_UI":"true"}}'
 # Some pods get it, some don't
 # Users see inconsistent UI
 # Can't easily turn it off for all users
@@ -257,7 +257,7 @@ ocpatch configmap app-config -p '{"data":{"FEATURE_NEW_UI":"true"}}'
 **Problem with mutable ConfigMap:**
 ```bash
 # Increase DB connections
-ocpatch configmap app-config -p '{"data":{"DB_MAX_CONNECTIONS":"50"}}'
+oc patch configmap app-config -p '{"data":{"DB_MAX_CONNECTIONS":"50"}}'
 # Pods restart gradually
 # Some pods overwhelm DB with 50 connections
 # Other pods still use 10 connections
@@ -277,7 +277,7 @@ ocpatch configmap app-config -p '{"data":{"DB_MAX_CONNECTIONS":"50"}}'
 **Problem with mutable ConfigMap:**
 ```bash
 # Someone reduces timeout too much
-ocpatch configmap app-config -p '{"data":{"API_TIMEOUT":"100"}}'
+oc patch configmap app-config -p '{"data":{"API_TIMEOUT":"100"}}'
 # Pods start timing out legitimate requests
 # Errors spike
 # Need to find the change, fix it, and wait for propagation
@@ -299,13 +299,13 @@ ocpatch configmap app-config -p '{"data":{"API_TIMEOUT":"100"}}'
 
 ```bash
 # Don't do this:
-ocedit configmap app-config  # ❌
+oc edit configmap app-config  # ❌
 
 # Do this:
 # Edit configmap-green.yaml in git
 # Commit and push
 # Deploy new version with new ConfigMap
-ocapply -f configmap-green.yaml  # ✓
+oc apply -f configmap-green.yaml  # ✓
 ```
 
 ### 2. Version ConfigMaps with Deployments
@@ -366,7 +366,7 @@ diff <(ocget cm app-config-blue -o yaml) \
      <(ocget cm app-config-green -o yaml)
 
 # Ensure blue and green use different ConfigMaps
-ocget deployment -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.template.spec.containers[0].envFrom[0].configMapRef.name}{"\n"}{end}'
+oc get deployment -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.template.spec.containers[0].envFrom[0].configMapRef.name}{"\n"}{end}'
 ```
 
 ## Troubleshooting
@@ -375,23 +375,23 @@ ocget deployment -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.temp
 
 ```bash
 # Check ConfigMap exists
-ocget configmap app-config-green
+oc get configmap app-config-green
 
 # Check ConfigMap is referenced correctly
-ocget deployment myapp-green -o yaml | grep -A 3 envFrom
+oc get deployment myapp-green -o yaml | grep -A 3 envFrom
 
 # Describe pod to see errors
-ocdescribe pod -l version=green
+oc describe pod -l version=green
 ```
 
 ### Issue: Config not being read
 
 ```bash
 # Verify environment variables in pod
-ocexec -it deployment/myapp-green -- env | grep -E "FEATURE|API|DB"
+oc exec -it deployment/myapp-green -- env | grep -E "FEATURE|API|DB"
 
 # Check /config endpoint
-ocport-forward deployment/myapp-green 8081:3000
+oc port-forward deployment/myapp-green 8081:3000
 curl http://localhost:8081/config
 ```
 
@@ -399,17 +399,17 @@ curl http://localhost:8081/config
 
 ```bash
 # Immediate rollback
-ocpatch svc myapp -p '{"spec":{"selector":{"version":"blue"}}}'
+oc patch svc myapp -p '{"spec":{"selector":{"version":"blue"}}}'
 
 # Verify
 curl http://myapp/config
 # Should show blue configuration
 
 # Fix green ConfigMap
-ocapply -f configmap-green-fixed.yaml
+oc apply -f configmap-green-fixed.yaml
 
 # Update green deployment to pick up new ConfigMap
-ocrollout restart deployment/myapp-green
+oc rollout restart deployment/myapp-green
 
 # Test again before switching
 ```
