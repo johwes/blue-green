@@ -5,6 +5,7 @@ metadata:
   labels:
     app: bluegreen-demo
     version: green
+immutable: true
 data:
   # Application configuration for Green environment (v2.0)
   # Updated configuration with new values

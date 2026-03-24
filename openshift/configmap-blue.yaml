@@ -5,6 +5,7 @@ metadata:
   labels:
     app: bluegreen-demo
     version: blue
+immutable: true
 data:
   # Application configuration for Blue environment (v1.0)
   MAX_REQUESTS_PER_MINUTE: "100"

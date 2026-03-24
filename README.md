@@ -33,11 +33,14 @@ The service uses label selectors to route traffic to either the blue or green de
 
 ## Real-World Use Case: Safe ConfigMap Updates
 
-**Problem:** A common issue in Kubernetes is updating ConfigMaps in-place, which can break applications:
+**The Scenario:** When a ConfigMap update breaks an application in production, teams often ask: "How long should I wait for changes to propagate? What's the right threshold before manually restarting pods?"
+
+**The Problem:** Traditional in-place ConfigMap updates create cascading issues:
 - Changes propagate gradually to pods (not atomic)
 - No easy way to test config before it goes live
 - Difficult to rollback when bad configuration breaks the app
 - Pods may run with mixed configurations during rollout
+- No clear answer to "how long should I wait?"
 
 **Solution:** Blue-green deployments with immutable ConfigMaps:
 - Each environment (blue/green) has its own ConfigMap
