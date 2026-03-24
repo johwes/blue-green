@@ -126,8 +126,8 @@ cd blue-green
 ConfigMaps are the same in OpenShift and Kubernetes:
 
 ```bash
-oc apply -f k8s/configmap-blue.yaml
-oc apply -f k8s/configmap-green.yaml
+oc apply -f openshift/configmap-blue.yaml
+oc apply -f openshift/configmap-green.yaml
 ```
 
 Verify:
@@ -187,7 +187,7 @@ oc get imagestream bluegreen-demo
 
 ```bash
 # Apply the blue deployment
-oc apply -f k8s/deployment-blue.yaml
+oc apply -f openshift/deployment-blue.yaml
 
 # Update to use the internal registry image
 oc set image deployment/bluegreen-demo-blue \
@@ -297,7 +297,7 @@ You should see blue configuration:
 
 ```bash
 # Apply green deployment
-oc apply -f k8s/deployment-green.yaml
+oc apply -f openshift/deployment-green.yaml
 
 # Update to use v2.0 image
 oc set image deployment/bluegreen-demo-green \
@@ -586,8 +586,8 @@ Now that you have the demo running:
    - Test rollback scenarios
 
 2. **Modify ConfigMaps**
-   - Edit `k8s/configmap-green.yaml`
-   - Apply changes: `oc apply -f k8s/configmap-green.yaml`
+   - Edit `openshift/configmap-green.yaml`
+   - Apply changes: `oc apply -f openshift/configmap-green.yaml`
    - Restart green: `oc rollout restart deployment/bluegreen-demo-green`
    - Test before switching traffic
 

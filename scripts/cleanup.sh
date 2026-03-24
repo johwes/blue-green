@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Blue-Green Demo - Cleanup
+# Blue-Green Demo - Cleanup (OpenShift)
 # This script removes all resources created by the demo
 
 set -e
@@ -15,13 +15,15 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Configuration
-NAMESPACE=${NAMESPACE:-default}
-
 echo -e "\n${YELLOW}This will delete:${NC}"
 echo "  - Blue deployment"
 echo "  - Green deployment"
+echo "  - Blue ConfigMap"
+echo "  - Green ConfigMap"
 echo "  - Service"
+echo "  - Route"
+echo "  - BuildConfig"
+echo "  - ImageStream"
 echo ""
 read -p "Are you sure you want to continue? (y/N) " -n 1 -r
 echo
@@ -30,16 +32,23 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
   exit 1
 fi
 
-echo -e "\n${RED}Deleting service...${NC}"
-kubectl delete svc bluegreen-demo -n ${NAMESPACE} --ignore-not-found=true
+echo -e "\n${RED}Deleting deployments...${NC}"
+oc delete deployment bluegreen-demo-blue --ignore-not-found=true
+oc delete deployment bluegreen-demo-green --ignore-not-found=true
 
-echo -e "\n${RED}Deleting blue deployment...${NC}"
-kubectl delete deployment bluegreen-demo-blue -n ${NAMESPACE} --ignore-not-found=true
+echo -e "\n${RED}Deleting ConfigMaps...${NC}"
+oc delete configmap bluegreen-demo-config-blue --ignore-not-found=true
+oc delete configmap bluegreen-demo-config-green --ignore-not-found=true
 
-echo -e "\n${RED}Deleting green deployment...${NC}"
-kubectl delete deployment bluegreen-demo-green -n ${NAMESPACE} --ignore-not-found=true
+echo -e "\n${RED}Deleting service and route...${NC}"
+oc delete svc bluegreen-demo --ignore-not-found=true
+oc delete route bluegreen-demo --ignore-not-found=true
+
+echo -e "\n${RED}Deleting build resources...${NC}"
+oc delete buildconfig bluegreen-demo --ignore-not-found=true
+oc delete imagestream bluegreen-demo --ignore-not-found=true
 
 echo -e "\n${GREEN}Cleanup complete!${NC}"
 
 echo -e "\n${YELLOW}Remaining resources:${NC}"
-kubectl get all -l app=bluegreen-demo -n ${NAMESPACE}
+oc get all,configmap -l app=bluegreen-demo

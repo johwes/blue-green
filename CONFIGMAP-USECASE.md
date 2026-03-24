@@ -32,7 +32,7 @@ A common Kubernetes anti-pattern is updating ConfigMaps in-place and expecting r
 
 ```bash
 # Developer updates ConfigMap with typo
-kubectl edit configmap app-config
+ocedit configmap app-config
 # Changed: MAX_REQUESTS_PER_MINUTE: "100"
 # To:      MAX_REQUESTS_PER_MINUTE: "10"  (typo - meant 1000)
 
@@ -83,26 +83,26 @@ Traditional (Mutable):                   Blue-Green (Immutable):
 **1. Atomic Configuration Changes**
 ```bash
 # Blue runs with old config (stable)
-kubectl get pods -l version=blue
+ocget pods -l version=blue
 # All blue pods use configmap-blue
 
 # Deploy green with new config
-kubectl apply -f configmap-green.yaml
-kubectl apply -f deployment-green.yaml
+ocapply -f configmap-green.yaml
+ocapply -f deployment-green.yaml
 # All green pods use configmap-green
 
 # Test green before switching traffic
-kubectl port-forward deployment/bluegreen-demo-green 8081:3000
+ocport-forward deployment/bluegreen-demo-green 8081:3000
 curl http://localhost:8081/config
 
 # Switch traffic ONLY when green is verified
-kubectl patch svc bluegreen-demo -p '{"spec":{"selector":{"version":"green"}}}'
+ocpatch svc bluegreen-demo -p '{"spec":{"selector":{"version":"green"}}}'
 ```
 
 **2. Instant Rollback**
 ```bash
 # If green config breaks something
-kubectl patch svc bluegreen-demo -p '{"spec":{"selector":{"version":"blue"}}}'
+ocpatch svc bluegreen-demo -p '{"spec":{"selector":{"version":"blue"}}}'
 # Traffic back to blue in < 1 second
 # Green still running for debugging
 ```
@@ -125,11 +125,11 @@ curl http://green-pod-ip:3000/config
 **4. Clear Version Tracking**
 ```bash
 # Know exactly which config each deployment uses
-kubectl get configmap -l version=blue
-kubectl get configmap -l version=green
+ocget configmap -l version=blue
+ocget configmap -l version=green
 
 # Audit trail through git
-git log k8s/configmap-green.yaml
+git log openshift/configmap-green.yaml
 ```
 
 ## Implementation Example
@@ -196,20 +196,20 @@ spec:
 
 ```bash
 # 1. Current state: Blue is active with blue config
-kubectl get svc myapp -o jsonpath='{.spec.selector.version}'
+ocget svc myapp -o jsonpath='{.spec.selector.version}'
 # Output: blue
 
 # 2. Create new ConfigMap for green
-kubectl apply -f configmap-green.yaml
+ocapply -f configmap-green.yaml
 
 # 3. Deploy green with new config
-kubectl apply -f deployment-green.yaml
+ocapply -f deployment-green.yaml
 
 # 4. Wait for green to be ready
-kubectl rollout status deployment/myapp-green
+ocrollout status deployment/myapp-green
 
 # 5. Test green configuration
-kubectl port-forward deployment/myapp-green 8081:3000
+ocport-forward deployment/myapp-green 8081:3000
 curl http://localhost:8081/config
 # Verify config values are correct
 
@@ -217,17 +217,17 @@ curl http://localhost:8081/config
 ./run-tests.sh http://localhost:8081
 
 # 7. Switch traffic to green (if tests pass)
-kubectl patch svc myapp -p '{"spec":{"selector":{"version":"green"}}}'
+ocpatch svc myapp -p '{"spec":{"selector":{"version":"green"}}}'
 
 # 8. Monitor for issues
-kubectl logs -f -l version=green
+oclogs -f -l version=green
 
 # 9. Rollback if needed (instant)
-kubectl patch svc myapp -p '{"spec":{"selector":{"version":"blue"}}}'
+ocpatch svc myapp -p '{"spec":{"selector":{"version":"blue"}}}'
 
 # 10. Clean up blue after green is stable (24-48 hours)
-kubectl delete deployment myapp-blue
-kubectl delete configmap app-config-blue
+ocdelete deployment myapp-blue
+ocdelete configmap app-config-blue
 ```
 
 ## Common Scenarios
@@ -237,7 +237,7 @@ kubectl delete configmap app-config-blue
 **Problem with mutable ConfigMap:**
 ```bash
 # Change feature flag
-kubectl patch configmap app-config -p '{"data":{"FEATURE_NEW_UI":"true"}}'
+ocpatch configmap app-config -p '{"data":{"FEATURE_NEW_UI":"true"}}'
 # Some pods get it, some don't
 # Users see inconsistent UI
 # Can't easily turn it off for all users
@@ -257,7 +257,7 @@ kubectl patch configmap app-config -p '{"data":{"FEATURE_NEW_UI":"true"}}'
 **Problem with mutable ConfigMap:**
 ```bash
 # Increase DB connections
-kubectl patch configmap app-config -p '{"data":{"DB_MAX_CONNECTIONS":"50"}}'
+ocpatch configmap app-config -p '{"data":{"DB_MAX_CONNECTIONS":"50"}}'
 # Pods restart gradually
 # Some pods overwhelm DB with 50 connections
 # Other pods still use 10 connections
@@ -277,7 +277,7 @@ kubectl patch configmap app-config -p '{"data":{"DB_MAX_CONNECTIONS":"50"}}'
 **Problem with mutable ConfigMap:**
 ```bash
 # Someone reduces timeout too much
-kubectl patch configmap app-config -p '{"data":{"API_TIMEOUT":"100"}}'
+ocpatch configmap app-config -p '{"data":{"API_TIMEOUT":"100"}}'
 # Pods start timing out legitimate requests
 # Errors spike
 # Need to find the change, fix it, and wait for propagation
@@ -299,20 +299,20 @@ kubectl patch configmap app-config -p '{"data":{"API_TIMEOUT":"100"}}'
 
 ```bash
 # Don't do this:
-kubectl edit configmap app-config  # ❌
+ocedit configmap app-config  # ❌
 
 # Do this:
 # Edit configmap-green.yaml in git
 # Commit and push
 # Deploy new version with new ConfigMap
-kubectl apply -f configmap-green.yaml  # ✓
+ocapply -f configmap-green.yaml  # ✓
 ```
 
 ### 2. Version ConfigMaps with Deployments
 
 ```
 git/
-├── k8s/
+├── openshift/
 │   ├── deployment-blue.yaml
 │   ├── configmap-blue.yaml    # Versioned together
 │   ├── deployment-green.yaml
@@ -362,11 +362,11 @@ data:
 
 ```bash
 # Compare configs between environments
-diff <(kubectl get cm app-config-blue -o yaml) \
-     <(kubectl get cm app-config-green -o yaml)
+diff <(ocget cm app-config-blue -o yaml) \
+     <(ocget cm app-config-green -o yaml)
 
 # Ensure blue and green use different ConfigMaps
-kubectl get deployment -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.template.spec.containers[0].envFrom[0].configMapRef.name}{"\n"}{end}'
+ocget deployment -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.template.spec.containers[0].envFrom[0].configMapRef.name}{"\n"}{end}'
 ```
 
 ## Troubleshooting
@@ -375,23 +375,23 @@ kubectl get deployment -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spe
 
 ```bash
 # Check ConfigMap exists
-kubectl get configmap app-config-green
+ocget configmap app-config-green
 
 # Check ConfigMap is referenced correctly
-kubectl get deployment myapp-green -o yaml | grep -A 3 envFrom
+ocget deployment myapp-green -o yaml | grep -A 3 envFrom
 
 # Describe pod to see errors
-kubectl describe pod -l version=green
+ocdescribe pod -l version=green
 ```
 
 ### Issue: Config not being read
 
 ```bash
 # Verify environment variables in pod
-kubectl exec -it deployment/myapp-green -- env | grep -E "FEATURE|API|DB"
+ocexec -it deployment/myapp-green -- env | grep -E "FEATURE|API|DB"
 
 # Check /config endpoint
-kubectl port-forward deployment/myapp-green 8081:3000
+ocport-forward deployment/myapp-green 8081:3000
 curl http://localhost:8081/config
 ```
 
@@ -399,17 +399,17 @@ curl http://localhost:8081/config
 
 ```bash
 # Immediate rollback
-kubectl patch svc myapp -p '{"spec":{"selector":{"version":"blue"}}}'
+ocpatch svc myapp -p '{"spec":{"selector":{"version":"blue"}}}'
 
 # Verify
 curl http://myapp/config
 # Should show blue configuration
 
 # Fix green ConfigMap
-kubectl apply -f configmap-green-fixed.yaml
+ocapply -f configmap-green-fixed.yaml
 
 # Update green deployment to pick up new ConfigMap
-kubectl rollout restart deployment/myapp-green
+ocrollout restart deployment/myapp-green
 
 # Test again before switching
 ```

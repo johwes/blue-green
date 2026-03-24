@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Blue-Green Demo - Switch Traffic to Green
+# Blue-Green Demo - Switch Traffic to Green (OpenShift)
 # This script updates the service selector to route traffic to green
 
 set -e
@@ -16,39 +16,37 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-NAMESPACE=${NAMESPACE:-default}
 SERVICE_NAME="bluegreen-demo"
 
 echo -e "\n${YELLOW}Current service configuration:${NC}"
-kubectl get svc ${SERVICE_NAME} -n ${NAMESPACE} -o jsonpath='{.spec.selector}' | jq .
+oc get svc ${SERVICE_NAME} -o jsonpath='{.spec.selector}' | jq .
 
 echo -e "\n${BLUE}Patching service to route to green...${NC}"
-kubectl patch svc ${SERVICE_NAME} -n ${NAMESPACE} -p '{"spec":{"selector":{"version":"green"}}}'
+oc patch svc ${SERVICE_NAME} -p '{"spec":{"selector":{"version":"green"}}}'
 
 echo -e "\n${GREEN}Traffic switched to green!${NC}"
 
 echo -e "\n${BLUE}New service configuration:${NC}"
-kubectl get svc ${SERVICE_NAME} -n ${NAMESPACE} -o jsonpath='{.spec.selector}' | jq .
+oc get svc ${SERVICE_NAME} -o jsonpath='{.spec.selector}' | jq .
 
 echo -e "\n${BLUE}Service endpoints (should show green pods):${NC}"
-kubectl get endpoints ${SERVICE_NAME} -n ${NAMESPACE}
+oc get endpoints ${SERVICE_NAME}
 
-echo -e "\n${BLUE}Verifying version (wait a few seconds for DNS to propagate):${NC}"
-sleep 3
+echo -e "\n${BLUE}Verifying version:${NC}"
+sleep 2
 
-# Try to curl the service if it's accessible
-SERVICE_IP=$(kubectl get svc ${SERVICE_NAME} -n ${NAMESPACE} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
-if [ -z "$SERVICE_IP" ]; then
-  SERVICE_IP=$(kubectl get svc ${SERVICE_NAME} -n ${NAMESPACE} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
-fi
+# Get the route URL
+ROUTE=$(oc get route ${SERVICE_NAME} -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
 
-if [ -n "$SERVICE_IP" ]; then
+if [ -n "$ROUTE" ]; then
   echo -e "\n${BLUE}Testing endpoint:${NC}"
-  curl -s http://${SERVICE_IP}/version | jq .
+  curl -s http://${ROUTE}/version | jq .
+  echo ""
+  echo -e "${GREEN}Application is now serving GREEN (v2.0)${NC}"
+  echo "Full URL: http://${ROUTE}"
 else
-  echo -e "\n${YELLOW}To test locally:${NC}"
-  echo "kubectl port-forward svc/${SERVICE_NAME} 8080:80 -n ${NAMESPACE}"
-  echo "curl http://localhost:8080/version"
+  echo -e "\n${YELLOW}Route not found. Check with:${NC}"
+  echo "oc get route ${SERVICE_NAME}"
 fi
 
 echo -e "\n${GREEN}Done!${NC}"

@@ -1,6 +1,6 @@
-# Blue-Green Deployment Demo for OpenShift/Kubernetes
+# Blue-Green Deployment Demo for Red Hat OpenShift
 
-A comprehensive hands-on learning path for understanding and implementing blue-green deployment strategies on **Red Hat OpenShift** and Kubernetes. **Includes real-world ConfigMap management use case.**
+A comprehensive hands-on learning path for understanding and implementing blue-green deployment strategies on **Red Hat OpenShift**. **Includes real-world ConfigMap management use case.**
 
 🎯 **Try it FREE on Red Hat Developer Sandbox** - No installation required! Get a free OpenShift cluster for 30 days at [sandbox.redhat.com](https://sandbox.redhat.com/)
 
@@ -60,12 +60,11 @@ See [CONFIGMAP-USECASE.md](CONFIGMAP-USECASE.md) for detailed explanation, examp
 │   ├── Dockerfile
 │   ├── package.json
 │   └── server.js
-├── k8s/                               # Kubernetes/OpenShift manifests
+├── openshift/                         # OpenShift manifests
 │   ├── configmap-blue.yaml            # Blue configuration
 │   ├── configmap-green.yaml           # Green configuration
-│   ├── deployment-blue.yaml
-│   ├── deployment-green.yaml
-│   └── service.yaml
+│   ├── deployment-blue.yaml           # Blue deployment
+│   └── deployment-green.yaml          # Green deployment
 └── scripts/                           # Deployment automation
     ├── deploy-blue.sh
     ├── deploy-green.sh
@@ -75,11 +74,9 @@ See [CONFIGMAP-USECASE.md](CONFIGMAP-USECASE.md) for detailed explanation, examp
 
 ## Quick Start
 
-### Option 1: Red Hat Developer Sandbox (Recommended - FREE!)
-
 **Get started in minutes with a free OpenShift cluster!**
 
-#### Prerequisites
+### Prerequisites
 - Red Hat account (free to create)
 - Web browser
 - `oc` CLI tool ([download here](https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/))
@@ -114,8 +111,8 @@ See [CONFIGMAP-USECASE.md](CONFIGMAP-USECASE.md) for detailed explanation, examp
    cd blue-green
 
    # Deploy ConfigMaps
-   oc apply -f k8s/configmap-blue.yaml
-   oc apply -f k8s/configmap-green.yaml
+   oc apply -f openshift/configmap-blue.yaml
+   oc apply -f openshift/configmap-green.yaml
 
    # Build the application image (OpenShift builds it for you!)
    oc new-build --name=bluegreen-demo --binary --strategy=docker
@@ -126,27 +123,13 @@ See [CONFIGMAP-USECASE.md](CONFIGMAP-USECASE.md) for detailed explanation, examp
    oc tag bluegreen-demo:latest bluegreen-demo:v2.0
 
    # Deploy blue
-   oc apply -f k8s/deployment-blue.yaml
+   oc apply -f openshift/deployment-blue.yaml
    oc set image deployment/bluegreen-demo-blue \
      app=image-registry.openshift-image-registry.svc:5000/$(oc project -q)/bluegreen-demo:v1.0
 
-   # Create service (ClusterIP for sandbox)
-   cat <<EOF | oc apply -f -
-   apiVersion: v1
-   kind: Service
-   metadata:
-     name: bluegreen-demo
-   spec:
-     type: ClusterIP
-     selector:
-       app: bluegreen-demo
-       version: blue
-     ports:
-     - port: 80
-       targetPort: 3000
-   EOF
-
-   # Expose with OpenShift route
+   # Create service and expose via route
+   oc create service clusterip bluegreen-demo --tcp=80:3000
+   oc patch svc bluegreen-demo -p '{"spec":{"selector":{"app":"bluegreen-demo","version":"blue"}}}'
    oc expose service bluegreen-demo
 
    # Get your route URL
@@ -156,7 +139,7 @@ See [CONFIGMAP-USECASE.md](CONFIGMAP-USECASE.md) for detailed explanation, examp
 5. **Deploy green and test switching**
    ```bash
    # Deploy green
-   oc apply -f k8s/deployment-green.yaml
+   oc apply -f openshift/deployment-green.yaml
    oc set image deployment/bluegreen-demo-green \
      app=image-registry.openshift-image-registry.svc:5000/$(oc project -q)/bluegreen-demo:v2.0
 
@@ -175,51 +158,27 @@ See [CONFIGMAP-USECASE.md](CONFIGMAP-USECASE.md) for detailed explanation, examp
    oc patch svc bluegreen-demo -p '{"spec":{"selector":{"version":"blue"}}}'
    ```
 
-**See [OPENSHIFT-SANDBOX.md](OPENSHIFT-SANDBOX.md) for detailed instructions with screenshots.**
+**See [OPENSHIFT-SANDBOX.md](OPENSHIFT-SANDBOX.md) for detailed instructions.**
 
----
-
-### Option 2: Local Kubernetes (minikube/kind)
-
-For local development without OpenShift:
-
-#### Prerequisites
-- Kubernetes cluster (minikube or kind)
-- kubectl configured
-- Docker for building images
-
-#### Deploy Steps
-```bash
-# Build images locally
-docker build -t bluegreen-demo:v1.0 ./app/
-docker build -t bluegreen-demo:v2.0 ./app/
-
-# Load to cluster
-kind load docker-image bluegreen-demo:v1.0
-kind load docker-image bluegreen-demo:v2.0
-
-# Deploy
-kubectl apply -f k8s/configmap-blue.yaml
-kubectl apply -f k8s/deployment-blue.yaml
-kubectl apply -f k8s/service.yaml
-
-# Test
-kubectl port-forward svc/bluegreen-demo 8080:80
-curl http://localhost:8080/config
-```
-
-See [TUTORIAL.md](TUTORIAL.md) for complete local setup instructions.
+**Or use the Makefile:**
+   ```bash
+   make oc-build        # Build image in OpenShift
+   make oc-deploy-all   # Deploy blue + service
+   make oc-deploy-green # Deploy green
+   make oc-switch-green # Switch to green
+   make oc-status       # Check status
+   ```
 
 ## Learning Path
 
-Follow the [TUTORIAL.md](TUTORIAL.md) for a comprehensive step-by-step guide that covers:
+Follow the [OPENSHIFT-SANDBOX.md](OPENSHIFT-SANDBOX.md) for a comprehensive step-by-step guide that covers:
 
 1. Understanding blue-green deployment concepts
-2. Setting up your Kubernetes environment
+2. Setting up your free OpenShift cluster
 3. Building and deploying the sample application
 4. Implementing traffic switching
 5. Testing rollback scenarios
-6. Best practices and considerations
+6. ConfigMap management best practices
 
 ## Next Steps
 
@@ -232,13 +191,9 @@ After completing this demo, consider exploring:
 
 ## Resources
 
-### Red Hat OpenShift
 - [Red Hat Developer Sandbox](https://sandbox.redhat.com/) - Free OpenShift cluster for 30 days
 - [OpenShift Documentation](https://docs.openshift.com/)
 - [OpenShift CLI (oc) Download](https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/)
 - [Red Hat Developer](https://developers.redhat.com/) - Tutorials and learning paths
-
-### Kubernetes & Cloud Native
-- [Kubernetes Documentation](https://kubernetes.io/docs/)
 - [12-Factor App Methodology](https://12factor.net/)
-- [CNCF Cloud Native Glossary](https://glossary.cncf.io/)
+- [OpenShift Blog](https://www.redhat.com/en/blog/channel/red-hat-openshift)

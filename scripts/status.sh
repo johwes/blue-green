@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Blue-Green Demo - Show Current Status
+# Blue-Green Demo - Show Current Status (OpenShift)
 # This script displays the current state of the deployment
 
 # Colors for output
@@ -11,7 +11,6 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # Configuration
-NAMESPACE=${NAMESPACE:-default}
 SERVICE_NAME="bluegreen-demo"
 
 echo "======================================="
@@ -19,25 +18,36 @@ echo "Blue-Green Deployment Status"
 echo "======================================="
 
 echo -e "\n${BLUE}Service Configuration:${NC}"
-kubectl get svc ${SERVICE_NAME} -n ${NAMESPACE} -o wide 2>/dev/null || echo "Service not found"
+oc get svc ${SERVICE_NAME} -o wide 2>/dev/null || echo "Service not found"
 
-ACTIVE_VERSION=$(kubectl get svc ${SERVICE_NAME} -n ${NAMESPACE} -o jsonpath='{.spec.selector.version}' 2>/dev/null || echo "unknown")
+ACTIVE_VERSION=$(oc get svc ${SERVICE_NAME} -o jsonpath='{.spec.selector.version}' 2>/dev/null || echo "unknown")
 echo -e "\n${GREEN}Active Version: ${ACTIVE_VERSION}${NC}"
 
+echo -e "\n${BLUE}Route (External Access):${NC}"
+oc get route ${SERVICE_NAME} 2>/dev/null || echo "Route not found"
+ROUTE=$(oc get route ${SERVICE_NAME} -o jsonpath='{.spec.host}' 2>/dev/null || echo "not-created")
+if [ "$ROUTE" != "not-created" ]; then
+  echo "URL: http://$ROUTE"
+fi
+
 echo -e "\n${BLUE}Blue Deployment:${NC}"
-kubectl get deployment bluegreen-demo-blue -n ${NAMESPACE} 2>/dev/null || echo "Blue deployment not found"
-kubectl get pods -l app=bluegreen-demo,version=blue -n ${NAMESPACE} --show-labels 2>/dev/null || echo "No blue pods"
+oc get deployment bluegreen-demo-blue 2>/dev/null || echo "Blue deployment not found"
+oc get pods -l app=bluegreen-demo,version=blue --show-labels 2>/dev/null || echo "No blue pods"
 
 echo -e "\n${BLUE}Green Deployment:${NC}"
-kubectl get deployment bluegreen-demo-green -n ${NAMESPACE} 2>/dev/null || echo "Green deployment not found"
-kubectl get pods -l app=bluegreen-demo,version=green -n ${NAMESPACE} --show-labels 2>/dev/null || echo "No green pods"
+oc get deployment bluegreen-demo-green 2>/dev/null || echo "Green deployment not found"
+oc get pods -l app=bluegreen-demo,version=green --show-labels 2>/dev/null || echo "No green pods"
+
+echo -e "\n${BLUE}ConfigMaps:${NC}"
+oc get configmap -l app=bluegreen-demo 2>/dev/null || echo "No ConfigMaps found"
 
 echo -e "\n${BLUE}Service Endpoints:${NC}"
-kubectl get endpoints ${SERVICE_NAME} -n ${NAMESPACE} 2>/dev/null || echo "No endpoints found"
-
-echo -e "\n${BLUE}Recent Events:${NC}"
-kubectl get events -n ${NAMESPACE} --sort-by='.lastTimestamp' | tail -10
+oc get endpoints ${SERVICE_NAME} 2>/dev/null || echo "No endpoints found"
 
 echo -e "\n${YELLOW}To test the service:${NC}"
-echo "kubectl port-forward svc/${SERVICE_NAME} 8080:80 -n ${NAMESPACE}"
-echo "curl http://localhost:8080/version"
+if [ "$ROUTE" != "not-created" ]; then
+  echo "curl http://$ROUTE/version"
+  echo "curl http://$ROUTE/config"
+else
+  echo "Route not created yet. Run: oc expose service ${SERVICE_NAME}"
+fi
