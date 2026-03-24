@@ -1,6 +1,6 @@
 # Blue-Green Deployment Demo for Kubernetes
 
-A comprehensive hands-on learning path for understanding and implementing blue-green deployment strategies using native Kubernetes resources.
+A comprehensive hands-on learning path for understanding and implementing blue-green deployment strategies using native Kubernetes resources. **Includes real-world ConfigMap management use case.**
 
 ## What is Blue-Green Deployment?
 
@@ -12,6 +12,7 @@ Blue-green deployment is a release management strategy that reduces downtime and
 - **Easy rollback**: Revert to the previous version by switching traffic back
 - **Testing in production**: Test new versions in a production-like environment
 - **Reduced risk**: New version is fully deployed and tested before receiving traffic
+- **Safe ConfigMap updates**: Avoid the common pitfall of mutable ConfigMaps breaking applications ([see detailed use case](CONFIGMAP-USECASE.md))
 
 ## Architecture Overview
 
@@ -28,17 +29,37 @@ Service (selector: version: blue OR green)
 
 The service uses label selectors to route traffic to either the blue or green deployment. Traffic switching is accomplished by updating the service's selector.
 
+## Real-World Use Case: Safe ConfigMap Updates
+
+**Problem:** A common issue in Kubernetes is updating ConfigMaps in-place, which can break applications:
+- Changes propagate gradually to pods (not atomic)
+- No easy way to test config before it goes live
+- Difficult to rollback when bad configuration breaks the app
+- Pods may run with mixed configurations during rollout
+
+**Solution:** Blue-green deployments with immutable ConfigMaps:
+- Each environment (blue/green) has its own ConfigMap
+- Test new configuration in green before switching traffic
+- Instant atomic switch when config is verified
+- Instant rollback if configuration causes issues
+- Configuration versioned with code in git
+
+See [CONFIGMAP-USECASE.md](CONFIGMAP-USECASE.md) for detailed explanation, examples, and best practices.
+
 ## Repository Structure
 
 ```
 .
 ├── README.md                          # This file
 ├── TUTORIAL.md                        # Step-by-step tutorial
-├── app/                               # Sample application
+├── CONFIGMAP-USECASE.md               # ConfigMap update use case
+├── app/                               # Sample application (Red Hat UBI base)
 │   ├── Dockerfile
 │   ├── package.json
 │   └── server.js
 ├── k8s/                               # Kubernetes manifests
+│   ├── configmap-blue.yaml            # Blue configuration
+│   ├── configmap-green.yaml           # Green configuration
 │   ├── deployment-blue.yaml
 │   ├── deployment-green.yaml
 │   └── service.yaml
@@ -60,7 +81,8 @@ The service uses label selectors to route traffic to either the blue or green de
 ### Deploy the Demo
 
 ```bash
-# 1. Deploy blue version (v1.0)
+# 1. Deploy blue configuration and application (v1.0)
+kubectl apply -f k8s/configmap-blue.yaml
 kubectl apply -f k8s/deployment-blue.yaml
 kubectl apply -f k8s/service.yaml
 
@@ -68,13 +90,22 @@ kubectl apply -f k8s/service.yaml
 kubectl get pods -l app=bluegreen-demo
 kubectl get svc bluegreen-demo
 
-# 3. Deploy green version (v2.0)
+# 3. Test blue configuration
+kubectl port-forward svc/bluegreen-demo 8080:80
+curl http://localhost:8080/config
+
+# 4. Deploy green configuration and application (v2.0)
+kubectl apply -f k8s/configmap-green.yaml
 kubectl apply -f k8s/deployment-green.yaml
 
-# 4. Switch traffic to green
+# 5. Test green configuration before switching
+kubectl port-forward deployment/bluegreen-demo-green 8081:3000
+curl http://localhost:8081/config
+
+# 6. Switch traffic to green
 ./scripts/switch-to-green.sh
 
-# 5. Rollback to blue if needed
+# 7. Rollback to blue if needed
 ./scripts/switch-to-blue.sh
 ```
 

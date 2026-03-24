@@ -32,6 +32,10 @@ spec:
           value: "green"
         - name: PORT
           value: "3000"
+        # Load all configuration from ConfigMap
+        envFrom:
+        - configMapRef:
+            name: bluegreen-demo-config-green
         resources:
           requests:
             memory: "64Mi"

@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bluegreen-demo-config-green
+  labels:
+    app: bluegreen-demo
+    version: green
+data:
+  # Application configuration for Green environment (v2.0)
+  # Updated configuration with new values
+  MAX_REQUESTS_PER_MINUTE: "200"
+  API_TIMEOUT: "3000"
+  LOG_LEVEL: "debug"
+
+  # Feature flags for Green environment
+  # New UI enabled in this version
+  FEATURE_NEW_UI: "true"
+  FEATURE_CACHE: "true"
+  FEATURE_METRICS: "true"
+
+  # Database configuration
+  # Increased connections for better performance
+  DB_HOST: "postgres.database.svc.cluster.local"
+  DB_MAX_CONNECTIONS: "20"

@@ -1,8 +1,8 @@
-# Use Node.js LTS version
-FROM node:18-alpine
+# Use Red Hat Universal Base Image for Node.js 20
+FROM registry.redhat.io/ubi8/nodejs-20-minimal:latest
 
 # Set working directory
-WORKDIR /app
+WORKDIR /opt/app-root/src
 
 # Copy package files
 COPY package*.json ./
@@ -16,15 +16,8 @@ COPY server.js ./
 # Expose port
 EXPOSE 3000
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
-
-# Change ownership
-RUN chown -R nodejs:nodejs /app
-
-# Switch to non-root user
-USER nodejs
+# UBI images run as non-root by default (user 1001)
+# No need to create user or change ownership
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

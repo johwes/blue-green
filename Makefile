@@ -33,12 +33,14 @@ load-minikube: ## Load images to minikube
 
 deploy-blue: ## Deploy blue environment
 	@echo "Deploying blue environment..."
+	kubectl apply -f k8s/configmap-blue.yaml -n $(NAMESPACE)
 	kubectl apply -f k8s/deployment-blue.yaml -n $(NAMESPACE)
 	kubectl rollout status deployment/bluegreen-demo-blue -n $(NAMESPACE)
 	@echo "✓ Blue deployed successfully"
 
 deploy-green: ## Deploy green environment
 	@echo "Deploying green environment..."
+	kubectl apply -f k8s/configmap-green.yaml -n $(NAMESPACE)
 	kubectl apply -f k8s/deployment-green.yaml -n $(NAMESPACE)
 	kubectl rollout status deployment/bluegreen-demo-green -n $(NAMESPACE)
 	@echo "✓ Green deployed successfully"
@@ -63,6 +65,9 @@ switch-blue: ## Switch traffic to blue (rollback)
 	@$(MAKE) verify-version
 
 status: ## Show deployment status
+	@echo "=== ConfigMaps ==="
+	@kubectl get configmaps -n $(NAMESPACE) -l app=bluegreen-demo
+	@echo ""
 	@echo "=== Deployments ==="
 	@kubectl get deployments -n $(NAMESPACE) -l app=bluegreen-demo
 	@echo ""
@@ -120,6 +125,8 @@ clean: ## Delete all resources
 	@echo "Deleting all blue-green resources..."
 	kubectl delete deployment bluegreen-demo-blue -n $(NAMESPACE) --ignore-not-found=true
 	kubectl delete deployment bluegreen-demo-green -n $(NAMESPACE) --ignore-not-found=true
+	kubectl delete configmap bluegreen-demo-config-blue -n $(NAMESPACE) --ignore-not-found=true
+	kubectl delete configmap bluegreen-demo-config-green -n $(NAMESPACE) --ignore-not-found=true
 	kubectl delete svc bluegreen-demo -n $(NAMESPACE) --ignore-not-found=true
 	@echo "✓ Cleanup complete"
 
