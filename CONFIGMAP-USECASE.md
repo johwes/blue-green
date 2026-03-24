@@ -32,7 +32,7 @@ A common Kubernetes anti-pattern is updating ConfigMaps in-place and expecting r
 
 ```bash
 # Developer updates ConfigMap with typo
-ocedit configmap app-config
+oc edit configmap app-config
 # Changed: MAX_REQUESTS_PER_MINUTE: "100"
 # To:      MAX_REQUESTS_PER_MINUTE: "10"  (typo - meant 1000)
 
